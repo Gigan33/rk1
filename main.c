@@ -1,106 +1,127 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <time.h>
+#ifdef _WIN32
 #include <conio.h>
-#include <windows.h>
-#include <locale.h>
-//Определяем константы для максимального количества слов, максимальной длины слова и размера страницы
-#define MAX_WORDS 1000
-#define MAX_WORD_LENGTH 1000
+#endif
 
+#define MAX_TEXT_SIZE 1000
+#define MAX_INPUT_SIZE 100
+#define MAX_FILENAME_SIZE 50
 
-void printText(char words[MAX_WORDS][MAX_WORD_LENGTH], int remainingWords) { //Функция для печати текста
-    for (int i = 0; i < remainingWords; i++) {
-        printf("%s ", words[i]);
-    }
-    printf("\n");
-}
-
-void setConsoleTextColor(int color) { //Определяем функцию для изменения цвета текста в консоли
-    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE); //Задаём атрибуты для шрифта консоли, чтобы ее покрасить
-    SetConsoleTextAttribute(hConsole, color);
-}
-
-int main() {
-    setlocale(LC_ALL, "Rus");
-    printf("Напечатайте текст как можно быстрее\n");
-    printf("Нажмите Enter, чтобы начать...\n");
-    getchar();
-
-    FILE* file = fopen("C:\\Users\\dzhik\\CLionProjects\\rk1\\text.txt", "r");
+int load_text(const char* filename, char* text) {
+    FILE* file = fopen(filename, "r");
     if (file == NULL) {
-        printf("Ошибка открытия файла.\n");
-        return 1;
+        printf("Failed to open file: %s\n", filename);
+        return 0;
     }
 
-    char words[MAX_WORDS][MAX_WORD_LENGTH]; //Создаем массив для слов и считываем текст из файла в массив
-    int totalWords = 0;
-    while (totalWords < MAX_WORDS && fgets(words[totalWords], MAX_WORD_LENGTH, file) != NULL) {
-        // Удаляем символ новой строки из считанного слова
-        words[totalWords][strcspn(words[totalWords], "\n")] = '\0'; //Если символов дальше нет, то конец строки
-        totalWords++;
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    if (file_size > MAX_TEXT_SIZE - 1) {
+        printf("Text file is too large.\n");
+        fclose(file);
+        return 0;
     }
+
+    size_t bytes_read = fread(text, 1, file_size, file);
+    text[bytes_read] = '\0';
 
     fclose(file);
 
-    printf("\nТекст:\n");
-    printText(words, totalWords);
+    return bytes_read;
+}
 
-    int totalChars = 0; //счетчик введенных символов
-    int totalWordsTyped = 0; // счетчик всех написанных слов
-    int totalWordsCorrect = 0; // счетчик правильных слов
-    int currentCharIndex = 0; // индекс текущего введенного символа
-    int numCorrectChars = 0; // Добавлено статистики по количеству правильно введённых символов
+#ifdef _WIN32
+char get_input_character() {
+    return _getch();
+}
 
-    clock_t startTime = clock(); // Засекаем время начала игры
+int get_elapsed_time() {
+    return clock() / CLOCKS_PER_SEC;
+}
 
-    printf("%s: ", words[totalWordsTyped]);
-    char userInput[MAX_WORD_LENGTH];
-    char currentChar;
+#endif
 
-    do {
-        currentChar = getch();// вводится символ
-        totalChars++; // Увеличиваем общее количество введённых символов
-        if (currentChar == words[totalWordsTyped][currentCharIndex]) {
-            setConsoleTextColor(10); // Зеленый цвет
-            printf("%c", currentChar);
-            setConsoleTextColor(15); // Возвращаем белый цвет
+
+void print_help() {
+    printf("Usage: <text_file> <time_limit> <max_errors>\n");
+}
+
+int main(int argc, char* argv[]) {
+    if (argc < 4) {
+        printf("Invalid arguments.\n");
+        print_help();
+        return 1;
+    }
+
+    char* text_file = argv[1];
+    int time_limit = atoi(argv[2]);
+    int max_errors = atoi(argv[3]);
+
+    char text[MAX_TEXT_SIZE];
+    if (!load_text(text_file, text)) {
+        return 1;
+    }
+
+    printf("Typing Test\n\n");
+    printf("Type the following text:\n\n%s\n\n", text);
+    printf("Press Enter to start...\n");
+    getchar();
+
+
+
+    int textLength = strlen(text);
+    int currentCharIndex = 0;
+    int numMistakes = 0;
+    int numLettersTyped = 0;
+    int numWordsTyped = 0;
+    double startTime = get_elapsed_time();
+    double currentTime = startTime;
+    double timeElapsed = 0.0;
+
+    printf("%s\n", text);
+
+    while (timeElapsed < time_limit && currentCharIndex < textLength) {
+        char input = get_input_character();
+        currentTime = get_elapsed_time();
+        timeElapsed = currentTime - startTime;
+
+        if (input == '\n') {
+            printf("\nText typing test completed.\n");
+            break;
+        }
+
+        if (input == text[currentCharIndex]) {
+            printf("\033[32m%c\033[0m", input); // РџРѕРґСЃРІРµС‚РєР° РїСЂР°РІРёР»СЊРЅРѕРіРѕ СЃРёРјРІРѕР»Р° Р·РµР»РµРЅС‹Рј
             currentCharIndex++;
-            numCorrectChars++; // Увеличиваем количество правильно введённых символов
-        }
-        else {
-            setConsoleTextColor(12); // Красный цвет
-            printf("%c", currentChar);
-            setConsoleTextColor(15); // Возвращаем белый цвет
-            currentCharIndex++;
+            numLettersTyped++;
+        } else {
+            printf("\033[31m%c\033[0m", text[currentCharIndex]); // РџРѕРґСЃРІРµС‚РєР° РЅРµРїСЂР°РІРёР»СЊРЅРѕРіРѕ СЃРёРјРІРѕР»Р° РєСЂР°СЃРЅС‹Рј
+            numMistakes++;
+            numLettersTyped++;
         }
 
-        if (currentCharIndex == strlen(words[totalWordsTyped])) {
-            printf("\n");
-            if (strcmp(userInput, words[totalWordsTyped]) == 0) { // Если строки равны, то увеличиваем кол-во правильных
-                totalWordsCorrect++;
-            }
-            totalWordsTyped++;
-            currentCharIndex = 0;
-            if (totalWordsTyped < totalWords) {
-                printf("%s: ", words[totalWordsTyped]);
-            }
+        if (input == ' ') {
+            numWordsTyped++;
         }
 
-    } while (totalWordsTyped < totalWords);
+        if (numMistakes > max_errors) {
+            printf("\nMaximum number of errors exceeded. Game over.\n");
+            break;
+        }
+    }
+    printf("\nRight letters: %d\n", numLettersTyped - numMistakes);
+    printf("Wrong letters: %d\n", numMistakes);
+    printf("Total letters typed: %d\n", numLettersTyped);
+    printf("Average typing speed (letters per minute): %.2f\n", (numLettersTyped / timeElapsed) * 60);
+    printf("Average typing speed (words per minute): %.2f\n", (numWordsTyped / timeElapsed) * 60);
 
-    clock_t endTime = clock(); // Засекаем время окончания игры
-
-    double totalTime = (double)(endTime - startTime) / CLOCKS_PER_SEC;
-    double speed = (double)totalWords / totalTime * 60;
-    double accuracy = (double)numCorrectChars / totalChars * 100; // Вычисляем точность ввода символов
-
-
-    printf("\n\nИгра окончена!\n");
-    printf("Общее время: %.2f сек\n", totalTime);
-    printf("Скорость: %.2f слов/мин\n", speed);
-    printf("Точность ввода символов: %.2f %%\n", accuracy);
-    printf("Общее количество введённых символов: %d\n", totalChars);
+    printf("\n\nTest completed.\n");
 
     return 0;
 }
